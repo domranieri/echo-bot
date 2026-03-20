@@ -53,7 +53,7 @@ Download from https://ffmpeg.org and add it to your system PATH.
 - Copy your Client ID and Client Secret
 
 ### 7. Configure your environment
-Create or open `.env` then fill in your credentials:
+Open `.env` and fill in your credentials:
 ```
 DISCORD_TOKEN=your_discord_token_here
 SPOTIFY_CLIENT_ID=your_spotify_client_id_here
