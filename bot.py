@@ -27,6 +27,10 @@ if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     )
     sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=10, retries=3)
 
+# ── Custom emojis ──────────────────────────────────────────────────────────────
+EMOJI_SPOTIFY = "<:spotify:1484599225269354506>"
+EMOJI_YOUTUBE = "<:youtube:1484599224401264781>"
+
 # ── FFmpeg / yt-dlp options ────────────────────────────────────────────────────
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -59,11 +63,13 @@ ytdl_playlist = yt_dlp.YoutubeDL(YTDL_PLAYLIST_OPTIONS)
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.remove_command("help")
 
 # ── Per-guild state ────────────────────────────────────────────────────────────
 queues: dict[int, deque] = {}
 now_playing: dict[int, dict] = {}
 idle_timers: dict[int, asyncio.Task] = {}
+stopped: dict[int, bool] = {}
 
 AUTO_DISCONNECT_SECONDS = 300           # 5 minutes idle before leaving
 
@@ -157,13 +163,12 @@ async def fetch_audio(search: str) -> dict:
     return {"title": data["title"], "url": data["url"], "webpage_url": data.get("webpage_url", search)}
 
 
-def make_np_embed(entry: dict, requester: discord.Member) -> discord.Embed:
+def make_np_embed(entry: dict) -> discord.Embed:
+    emoji = EMOJI_SPOTIFY if entry.get("_source") == "spotify" else EMOJI_YOUTUBE
     embed = discord.Embed(
-        title="🎵 Now Playing",
-        description=f"**[{entry['title']}]({entry.get('webpage_url', '')})**",
+        description=f"{emoji} Started playing **[{entry['title']}]({entry.get('webpage_url', '')})**",
         color=discord.Color.green(),
     )
-    embed.set_footer(text=f"Requested by {requester.display_name}", icon_url=requester.display_avatar.url)
     return embed
 
 
@@ -172,15 +177,17 @@ def make_queue_embed(guild_id: int) -> discord.Embed:
     embed = discord.Embed(title="📋 Queue", color=discord.Color.blurple())
     np = now_playing.get(guild_id)
     if np:
+        emoji = EMOJI_SPOTIFY if np.get("_source") == "spotify" else EMOJI_YOUTUBE
         embed.add_field(
             name="Now Playing",
-            value=f"**{np['title']}** — requested by {np['requester'].display_name}",
+            value=f"{emoji} **{np['title']}**",
             inline=False,
         )
     if q:
         lines = []
         for i, item in enumerate(list(q)[:10], 1):
-            lines.append(f"`{i}.` {item['title']} — {item['requester'].display_name}")
+            emoji = EMOJI_SPOTIFY if item.get("_source") == "spotify" else EMOJI_YOUTUBE
+            lines.append(f"`{i}.` {emoji} {item['title']}")
         if len(q) > 10:
             lines.append(f"*...and {len(q) - 10} more*")
         embed.add_field(name="Up Next", value="\n".join(lines), inline=False)
@@ -205,6 +212,9 @@ async def start_idle_timer(guild_id: int, vc: discord.VoiceClient):
 
 async def play_next(ctx: commands.Context):
     """Play the next track in the queue, lazily fetching audio as needed."""
+    if stopped.get(ctx.guild.id):
+        return
+
     cancel_idle_timer(ctx.guild.id)
     q = get_queue(ctx.guild.id)
 
@@ -217,7 +227,7 @@ async def play_next(ctx: commands.Context):
 
     entry = q.popleft()
 
-    # Fetch for entries that only have a search term
+    # Lazy-fetch for entries that only have a search term
     if entry.get("url") is None and entry.get("_search"):
         try:
             fetched = await fetch_audio(entry["_search"])
@@ -239,7 +249,7 @@ async def play_next(ctx: commands.Context):
         asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop)
 
     ctx.voice_client.play(source, after=after_play)
-    await ctx.send(embed=make_np_embed(entry, entry["requester"]))
+    await ctx.send(embed=make_np_embed(entry))
 
 
 # ── Commands ───────────────────────────────────────────────────────────────────
@@ -267,7 +277,7 @@ async def play(ctx: commands.Context, *, query: str):
                 if len(search_terms) > 1:
                     await ctx.send(f"🔍 Queueing **{len(search_terms)} tracks** from Spotify...")
                 for term in search_terms:
-                    q.append({"title": term, "url": None, "_search": term, "requester": ctx.author})
+                    q.append({"title": term, "url": None, "_search": term, "requester": ctx.author, "_source": "spotify"})
                 if not vc.is_playing() and not vc.is_paused():
                     await play_next(ctx)
                 return
@@ -278,12 +288,14 @@ async def play(ctx: commands.Context, *, query: str):
                     await ctx.send(f"🔍 Queueing **{len(playlist_entries)} tracks** from playlist...")
                     for e in playlist_entries:
                         e["requester"] = ctx.author
+                        e["_source"] = "youtube"
                         q.append(e)
                     if not vc.is_playing() and not vc.is_paused():
                         await play_next(ctx)
                     return
                 else:
                     result["requester"] = ctx.author
+                    result["_source"] = "youtube"
                     entries = [result]
 
         except Exception as e:
@@ -335,7 +347,9 @@ async def stop(ctx: commands.Context):
         cancel_idle_timer(ctx.guild.id)
         get_queue(ctx.guild.id).clear()
         now_playing.pop(ctx.guild.id, None)
+        stopped[ctx.guild.id] = True
         ctx.voice_client.stop()
+        stopped[ctx.guild.id] = False
         await ctx.send("⏹ Stopped and queue cleared.")
     else:
         await ctx.send("❌ Not connected.")
@@ -401,9 +415,48 @@ async def nowplaying(ctx: commands.Context):
     """Show what's currently playing."""
     np = now_playing.get(ctx.guild.id)
     if np:
-        await ctx.send(embed=make_np_embed(np, np["requester"]))
+        await ctx.send(embed=make_np_embed(np))
     else:
         await ctx.send("❌ Nothing is playing right now.")
+
+
+@bot.command(name="help", aliases=["h"])
+async def help_cmd(ctx: commands.Context):
+    """Show all available commands."""
+    embed = discord.Embed(
+        title="Echo Commands",
+        color=discord.Color.blurple()
+    )
+    embed.add_field(
+        name="🎵 Playback",
+        value=(
+            "`!play <query>` — Play a YouTube/Spotify URL or search term\n"
+            "`!skip` — Skip the current track\n"
+            "`!pause` — Pause playback\n"
+            "`!resume` — Resume playback\n"
+            "`!stop` — Stop playback and clear the queue\n"
+            "`!nowplaying` — Show what's currently playing"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="📋 Queue",
+        value=(
+            "`!queue` — Show the current queue\n"
+            "`!shuffle` — Shuffle the queue\n"
+            "`!remove <#>` — Remove a track by position"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="⚙️ Misc",
+        value=(
+            "`!volume <0-100>` — Set the volume\n"
+            "`!leave` — Disconnect the bot from voice"
+        ),
+        inline=False
+    )
+    await ctx.send(embed=embed)
 
 
 # ── Auto disconnect on voice state change ──────────────────────────────────────
@@ -429,7 +482,8 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} ({bot.user.id})")
+    print(f"✅ Logged in as {bot.user} ({bot.user.id})")
+    await bot.change_presence(activity=discord.CustomActivity(name="!play"))
 
 
 @bot.event
