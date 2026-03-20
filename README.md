@@ -10,9 +10,9 @@ A self hosted Discord music bot built with Python
 ## Requirements
 - Python 3.10+
 - Node.js 20+
+- Git
 - FFmpeg
 - PyNaCl
-- Git
 
 ## Installation
 
