@@ -28,8 +28,8 @@ if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=10, retries=3)
 
 # ── Custom emojis ──────────────────────────────────────────────────────────────
-EMOJI_SPOTIFY = "<:spotify:1484599225269354506>"
-EMOJI_YOUTUBE = "<:youtube:1484599224401264781>"
+EMOJI_SPOTIFY = "<BOT_EMOJI_CODE>"
+EMOJI_YOUTUBE = "<BOT_EMOJI_CODE>"
 
 # ── FFmpeg / yt-dlp options ────────────────────────────────────────────────────
 FFMPEG_OPTIONS = {
