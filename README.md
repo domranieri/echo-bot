@@ -40,6 +40,7 @@ Download from https://ffmpeg.org and add it to your system PATH.
 - Copy your bot token
 - Under **OAuth2 → URL Generator**, select `bot` scope and the following permissions:
   - Send Messages
+  - Read Message History
   - Embed Links
   - Connect
   - Speak
