@@ -1,5 +1,5 @@
 # Echo
-A self hosted Discord music bot built with Python that supports YouTube, YouTube Music, and Spotify playback
+A self hosted Discord music bot built with Python
 
 ## Features
 -  Play audio from YouTube, YouTube Music, and Spotify
