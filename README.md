@@ -4,8 +4,8 @@ A self hosted Discord music bot built with Python
 ## Features
 -  Play audio from YouTube, YouTube Music, and Spotify
 -  Queue management with shuffle and remove
--  Automatic audio normalization
 -  Pause, resume, and skip controls
+-  Automatic audio normalization
 
 ## Requirements
 - Python 3.10+
