@@ -89,19 +89,14 @@ python bot.py
 | `!volume <0-100>` | `!vol` | Set the playback volume |
 | `!leave` | `!disconnect`, `!dc` | Disconnect the bot from voice |
 
-## Supported Input Formats
-- YouTube & YouTube Music track/playlist URLs
-- Spotify track/playlist URLs
-- Search terms (searches YouTube automatically)
 
 ## Notes
 - Spotify links are resolved to YouTube searches for audio playback, as Spotify does not provide direct audio streaming via its API
 - The bot will automatically disconnect after 5 minutes of being left alone in a voice channel
 - Audio normalization is applied automatically to keep volume levels consistent across tracks
-- Keep yt-dlp updated regularly to maintain YouTube compatibility: `python -m pip install -U yt-dlp`
 
 ## Maintenance
-YouTube periodically changes its systems in ways that break yt-dlp. If tracks stop playing, update yt-dlp first:
+Keep yt-dlp updated regularly to maintain YouTube compatibility:
 ```bash
 python -m pip install -U yt-dlp
 ```
