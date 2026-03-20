@@ -1,5 +1,5 @@
 # Echo
-A self hosted Discord music bot built with Python that supports YouTube, YouTube Music, and Spotify playback.
+A self hosted Discord music bot built with Python that supports YouTube, YouTube Music, and Spotify playback
 
 ## Features
 -  Play audio from YouTube, YouTube Music, and Spotify
@@ -12,28 +12,32 @@ A self hosted Discord music bot built with Python that supports YouTube, YouTube
 - Node.js 20+
 - FFmpeg
 - PyNaCl
+- Git
 
 ## Installation
 
-### 1. Clone the repository
+### 1. Install Git
+Download and install from https://git-scm.com if you don't already have it. Verify with `git --version`.
+
+### 2. Clone the repository
 ```bash
 git clone https://github.com/domranieri/echo-bot.git
 cd echo
 ```
 
-### 2. Install Python dependencies
+### 3. Install Python dependencies
 ```bash
 python -m pip install "discord.py[voice]" yt-dlp spotipy python-dotenv
 ```
 
-### 3. Install Node.js
+### 4. Install Node.js
 Download and install from https://nodejs.org
 This is required by yt-dlp to solve YouTube's JavaScript challenges.
 
-### 4. Install FFmpeg
+### 5. Install FFmpeg
 Download from https://ffmpeg.org and add it to your system PATH.
 
-### 5. Set up a Discord bot
+### 6. Set up Discord bot
 - Go to https://discord.com/developers/applications
 - Create a new application and navigate to the **Bot** tab
 - Enable **Message Content Intent** under Privileged Gateway Intents
@@ -46,14 +50,14 @@ Download from https://ffmpeg.org and add it to your system PATH.
   - Speak
 - Use the generated URL to invite the bot to your server
 
-### 6. Set up Spotify API credentials
+### 7. Set up Spotify API credentials
 - Go to https://developer.spotify.com/dashboard
 - Create a new app
 - Add `http://127.0.0.1:8888/callback` as a redirect URI
 - Select **Web API** under APIs used
 - Copy your Client ID and Client Secret
 
-### 7. Configure your environment
+### 8. Configure your environment
 Open `.env` and fill in your credentials:
 ```
 DISCORD_TOKEN=your_discord_token_here
@@ -61,14 +65,14 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id_here
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
 ```
 
-### 8. Authenticate with Spotify
+### 9. Authenticate with Spotify
 Run this once to log in and cache your Spotify credentials:
 ```bash
 python spotify_auth.py
 ```
 A browser window will open asking you to log in to Spotify and approve the app. After approving, a `.spotify_cache` file will be saved locally and you won't need to do this again.
 
-### 9. Run the bot
+### 10. Run the bot
 ```bash
 python bot.py
 ```
