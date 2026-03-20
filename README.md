@@ -92,6 +92,7 @@ python bot.py
 | `!remove <number>` | `!rm` | Remove a track from the queue by position |
 | `!volume <0-100>` | `!vol` | Set the playback volume |
 | `!leave` | `!disconnect`, `!dc` | Disconnect the bot from voice |
+| `!help` | `!h` | Show all available commands |
 
 
 ## Notes
