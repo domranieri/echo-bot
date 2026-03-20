@@ -17,7 +17,7 @@ A self hosted Discord music bot built with Python
 ## Installation
 
 ### 1. Install Git
-Download and install from https://git-scm.com if you don't already have it. Verify with `git --version`.
+Download and install from https://git-scm.com if you don't already have it. Verify with `git --version`
 
 ### 2. Clone the repository
 ```bash
@@ -32,10 +32,10 @@ python -m pip install "discord.py[voice]" yt-dlp spotipy python-dotenv
 
 ### 4. Install Node.js
 Download and install from https://nodejs.org
-This is required by yt-dlp to solve YouTube's JavaScript challenges.
+This is required by yt-dlp to solve YouTube's JavaScript challenges
 
 ### 5. Install FFmpeg
-Download from https://ffmpeg.org and add it to your system PATH.
+Download from https://ffmpeg.org and add it to your system PATH
 
 ### 6. Set up Discord bot
 - Go to https://discord.com/developers/applications
@@ -70,7 +70,7 @@ Run this once to log in and cache your Spotify credentials:
 ```bash
 python spotify_auth.py
 ```
-A browser window will open asking you to log in to Spotify and approve the app. After approving, a `.spotify_cache` file will be saved locally and you won't need to do this again.
+A browser window will open asking you to log in to Spotify and approve the app. After approving, a `.spotify_cache` file will be saved locally and you won't need to do this again
 
 ### 10. Run the bot
 ```bash
@@ -105,7 +105,7 @@ Keep yt-dlp updated regularly to maintain YouTube compatibility:
 python -m pip install -U yt-dlp
 ```
 
-If Spotify authentication stops working, delete `.spotify_cache` and run `spotify_auth.py` again.
+If Spotify authentication stops working, delete `.spotify_cache` and run `spotify_auth.py` again
 
 ## Built With
 - [discord.py](https://github.com/Rapptz/discord.py)
