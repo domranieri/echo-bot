@@ -15,7 +15,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
-# ── Spotify client (optional, gracefully skipped if creds are missing) ────────
+# ── Spotify client ────────
 sp = None
 if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     auth_manager = spotipy.SpotifyOAuth(
@@ -28,8 +28,8 @@ if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
     sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=10, retries=3)
 
 # ── Custom emojis ──────────────────────────────────────────────────────────────
-EMOJI_SPOTIFY = "<BOT_EMOJI_CODE>"
-EMOJI_YOUTUBE = "<BOT_EMOJI_CODE>"
+EMOJI_SPOTIFY = "<:spotify:your_spotify_emoji_id_here>"
+EMOJI_YOUTUBE = "<:youtube:your_youtube_emoji_id_here>"
 
 # ── FFmpeg / yt-dlp options ────────────────────────────────────────────────────
 FFMPEG_OPTIONS = {
@@ -44,7 +44,8 @@ YTDL_OPTIONS = {
     "no_warnings": True,
     "default_search": "ytsearch",
     "source_address": "0.0.0.0",
-    "extractor_args": {"youtube": {"js_runtimes": ["nodejs:C:\\Program Files\\nodejs\\node.exe"]}},
+    # Update the path below to match your Node.js installation
+    "extractor_args": {"youtube": {"js_runtimes": ["nodejs:/path/to/node"]}},
 }
 
 YTDL_PLAYLIST_OPTIONS = {
@@ -53,7 +54,8 @@ YTDL_PLAYLIST_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
-    "extractor_args": {"youtube": {"js_runtimes": ["nodejs:C:\\Program Files\\nodejs\\node.exe"]}},
+    # Update the path below to match your Node.js installation
+    "extractor_args": {"youtube": {"js_runtimes": ["nodejs:/path/to/node"]}},
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
@@ -78,6 +80,25 @@ def get_queue(guild_id: int) -> deque:
     if guild_id not in queues:
         queues[guild_id] = deque()
     return queues[guild_id]
+
+
+# ── Error classifier ───────────────────────────────────────────────────────────
+
+def classify_error(e: Exception) -> str:
+    msg = str(e).lower()
+    if "age" in msg or "sign in" in msg or "confirm your age" in msg:
+        return "❌ This track is age restricted on YouTube and can't be played"
+    if "private" in msg:
+        return "❌ This track or playlist is private"
+    if "unavailable" in msg or "not available" in msg:
+        return "❌ This track or playlist is unavailable in this region or has been removed"
+    if "copyright" in msg:
+        return "❌ This track has been blocked due to a copyright claim"
+    if "members only" in msg:
+        return "❌ That video is for channel members only."
+    if "urlopen error" in msg or "network" in msg:
+        return "❌ A network error occurred. Please try again"
+    return f"❌ Something went wrong: {type(e).__name__}"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -123,7 +144,7 @@ def _resolve_spotify_inner(url: str) -> list[str]:
 
 
 def resolve_spotify(url: str) -> list[str]:
-    """Resolve a Spotify URL to a list of 'Artist - Title' search strings, with auto-retry on 401."""
+    """Resolve a Spotify URL to a list of 'Artist - Title' search strings with auto retry on 401"""
     if sp is None:
         raise RuntimeError("Spotify credentials are not configured in .env")
     try:
@@ -132,11 +153,15 @@ def resolve_spotify(url: str) -> list[str]:
         if e.http_status == 401:
             sp._auth_manager.get_access_token(as_dict=False)
             return _resolve_spotify_inner(url)
-        raise
+        if e.http_status == 403:
+            raise RuntimeError("❌ This playlist is private or unavailable")
+        if e.http_status == 404:
+            raise RuntimeError("❌ This playlist is private or unavailable")
+        raise RuntimeError(f"❌ Spotify error: {e.http_status}")
 
 
 async def fetch_audio(search: str) -> dict:
-    """Resolve a search string or URL to a streamable audio entry."""
+    """Resolve a search string or URL to a streamable audio entry"""
     loop = asyncio.get_event_loop()
 
     if ("list=" in search or "/playlist" in search) and "spotify" not in search:
@@ -192,7 +217,7 @@ def make_queue_embed(guild_id: int) -> discord.Embed:
             lines.append(f"*...and {len(q) - 10} more*")
         embed.add_field(name="Up Next", value="\n".join(lines), inline=False)
     else:
-        embed.add_field(name="Up Next", value="The queue is empty.", inline=False)
+        embed.add_field(name="Up Next", value="The queue is empty", inline=False)
     return embed
 
 
@@ -211,7 +236,7 @@ async def start_idle_timer(guild_id: int, vc: discord.VoiceClient):
 
 
 async def play_next(ctx: commands.Context):
-    """Play the next track in the queue, lazily fetching audio as needed."""
+    """Play the next track in the queue, fetching audio as needed"""
     if stopped.get(ctx.guild.id):
         return
 
@@ -220,14 +245,13 @@ async def play_next(ctx: commands.Context):
 
     if not q:
         now_playing.pop(ctx.guild.id, None)
-        await ctx.send("✅ Queue finished. Leaving voice channel.")
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
         return
 
     entry = q.popleft()
 
-    # Lazy-fetch for entries that only have a search term
+    # Fetch for entries that only have a search term
     if entry.get("url") is None and entry.get("_search"):
         try:
             fetched = await fetch_audio(entry["_search"])
@@ -235,7 +259,7 @@ async def play_next(ctx: commands.Context):
             entry["title"] = fetched["title"]
             entry["webpage_url"] = fetched.get("webpage_url", "")
         except Exception as e:
-            await ctx.send(f"⚠️ Skipping **{entry['title']}** — could not fetch: {e}")
+            await ctx.send(f"⚠️ Skipping **{entry['title']}** — {classify_error(e)}")
             await play_next(ctx)
             return
 
@@ -256,9 +280,9 @@ async def play_next(ctx: commands.Context):
 
 @bot.command(name="play", aliases=["p"])
 async def play(ctx: commands.Context, *, query: str):
-    """Play a YouTube URL, Spotify track/album/playlist, or search YouTube."""
+    """Play a YouTube/Spotify track/album/playlist, or search YouTube"""
     if not ctx.author.voice:
-        return await ctx.send("❌ You need to be in a voice channel first.")
+        return await ctx.send("❌ You need to be in a voice channel first")
     vc = ctx.voice_client
     if vc is None:
         vc = await ctx.author.voice.channel.connect()
@@ -273,7 +297,7 @@ async def play(ctx: commands.Context, *, query: str):
             if is_spotify_url(query):
                 search_terms = resolve_spotify(query)
                 if not search_terms:
-                    return await ctx.send("❌ Couldn't find any playable tracks from that Spotify link.")
+                    return await ctx.send("❌ Couldn't find any playable tracks from this link")
                 if len(search_terms) > 1:
                     await ctx.send(f"🔍 Queueing **{len(search_terms)} tracks** from Spotify...")
                 for term in search_terms:
@@ -298,8 +322,10 @@ async def play(ctx: commands.Context, *, query: str):
                     result["_source"] = "youtube"
                     entries = [result]
 
+        except RuntimeError as e:
+            return await ctx.send(str(e))
         except Exception as e:
-            return await ctx.send(f"❌ Error: {e}")
+            return await ctx.send(classify_error(e))
 
     for entry in entries:
         if vc.is_playing() or vc.is_paused() or q:
@@ -312,37 +338,37 @@ async def play(ctx: commands.Context, *, query: str):
 
 @bot.command(name="skip", aliases=["s"])
 async def skip(ctx: commands.Context):
-    """Skip the current track."""
+    """Skip the current track"""
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
-        await ctx.send("⏭ Skipped.")
+        await ctx.send("⏭ Skipped")
     else:
-        await ctx.send("❌ Nothing is playing.")
+        await ctx.send("❌ Nothing is playing")
 
 
 @bot.command(name="pause")
 async def pause(ctx: commands.Context):
-    """Pause playback."""
+    """Pause playback"""
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.pause()
-        await ctx.send("⏸ Paused.")
+        await ctx.send("⏸ Paused")
     else:
-        await ctx.send("❌ Nothing is playing.")
+        await ctx.send("❌ Nothing is playing")
 
 
 @bot.command(name="resume", aliases=["r"])
 async def resume(ctx: commands.Context):
-    """Resume playback."""
+    """Resume playback"""
     if ctx.voice_client and ctx.voice_client.is_paused():
         ctx.voice_client.resume()
-        await ctx.send("▶️ Resumed.")
+        await ctx.send("▶️ Resumed")
     else:
-        await ctx.send("❌ Nothing is paused.")
+        await ctx.send("❌ Nothing is paused")
 
 
 @bot.command(name="stop")
 async def stop(ctx: commands.Context):
-    """Stop playback and clear the queue."""
+    """Stop playback and clear the queue"""
     if ctx.voice_client:
         cancel_idle_timer(ctx.guild.id)
         get_queue(ctx.guild.id).clear()
@@ -350,23 +376,23 @@ async def stop(ctx: commands.Context):
         stopped[ctx.guild.id] = True
         ctx.voice_client.stop()
         stopped[ctx.guild.id] = False
-        await ctx.send("⏹ Stopped and queue cleared.")
+        await ctx.send("⏹ Stopped and queue cleared")
     else:
-        await ctx.send("❌ Not connected.")
+        await ctx.send("❌ Not connected")
 
 
 @bot.command(name="queue", aliases=["q"])
 async def queue_cmd(ctx: commands.Context):
-    """Show the current queue."""
+    """Show the current queue"""
     await ctx.send(embed=make_queue_embed(ctx.guild.id))
 
 
 @bot.command(name="shuffle")
 async def shuffle(ctx: commands.Context):
-    """Shuffle the queue."""
+    """Shuffle the queue"""
     q = get_queue(ctx.guild.id)
     if len(q) < 2:
-        return await ctx.send("❌ Not enough tracks in the queue to shuffle.")
+        return await ctx.send("❌ Not enough tracks in the queue to shuffle")
     q_list = list(q)
     random.shuffle(q_list)
     queues[ctx.guild.id] = deque(q_list)
@@ -375,54 +401,54 @@ async def shuffle(ctx: commands.Context):
 
 @bot.command(name="remove", aliases=["rm"])
 async def remove(ctx: commands.Context, index: int):
-    """Remove a track from the queue by its position number."""
+    """Remove a track from the queue by its position number"""
     q = get_queue(ctx.guild.id)
     if not q:
-        return await ctx.send("❌ The queue is empty.")
+        return await ctx.send("❌ The queue is empty")
     if index < 1 or index > len(q):
-        return await ctx.send(f"❌ Invalid position. Queue has {len(q)} tracks.")
+        return await ctx.send(f"❌ Invalid position. Queue has {len(q)} tracks")
     q_list = list(q)
     removed = q_list.pop(index - 1)
     queues[ctx.guild.id] = deque(q_list)
-    await ctx.send(f"🗑️ Removed **{removed['title']}** from the queue.")
+    await ctx.send(f"🗑️ Removed **{removed['title']}** from the queue")
 
 
 @bot.command(name="volume", aliases=["vol"])
 async def volume(ctx: commands.Context, vol: int):
-    """Set volume (0–100)."""
+    """Set volume (0–100)"""
     if not ctx.voice_client or not ctx.voice_client.source:
-        return await ctx.send("❌ Nothing is playing.")
+        return await ctx.send("❌ Nothing is playing")
     if not 0 <= vol <= 100:
-        return await ctx.send("❌ Volume must be between 0 and 100.")
+        return await ctx.send("❌ Volume must be between 0 and 100")
     ctx.voice_client.source.volume = vol / 100
     await ctx.send(f"🔊 Volume set to **{vol}%**")
 
 
 @bot.command(name="leave", aliases=["disconnect", "dc"])
 async def leave(ctx: commands.Context):
-    """Disconnect the bot from voice."""
+    """Disconnect the bot from voice"""
     if ctx.voice_client:
         cancel_idle_timer(ctx.guild.id)
         get_queue(ctx.guild.id).clear()
         now_playing.pop(ctx.guild.id, None)
         await ctx.voice_client.disconnect()
     else:
-        await ctx.send("❌ Not connected.")
+        await ctx.send("❌ Not connected")
 
 
 @bot.command(name="nowplaying", aliases=["np"])
 async def nowplaying(ctx: commands.Context):
-    """Show what's currently playing."""
+    """Show what's currently playing"""
     np = now_playing.get(ctx.guild.id)
     if np:
         await ctx.send(embed=make_np_embed(np))
     else:
-        await ctx.send("❌ Nothing is playing right now.")
+        await ctx.send("❌ Nothing is playing right now")
 
 
 @bot.command(name="help", aliases=["h"])
 async def help_cmd(ctx: commands.Context):
-    """Show all available commands."""
+    """Show all available commands"""
     embed = discord.Embed(
         title="Echo Commands",
         color=discord.Color.blurple()
@@ -463,7 +489,7 @@ async def help_cmd(ctx: commands.Context):
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """Start idle timer if bot is left alone in a voice channel."""
+    """Start idle timer if bot is left alone in a voice channel"""
     if member.bot:
         return
     guild = member.guild
