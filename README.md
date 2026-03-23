@@ -1,4 +1,4 @@
-# Echo
+# Echo 
 A self hosted Discord music bot built with Python
 
 ## Features
